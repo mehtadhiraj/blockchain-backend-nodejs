@@ -19,6 +19,7 @@
     "mongoose": "^5.8.9",
     "morgan": "~1.9.1",
     "nodemon": "^2.0.2",
-    "random-words": "^1.1.0"
+    "random-words": "^1.1.0",
+    "response-time": "^2.3.2"
   }
 }
