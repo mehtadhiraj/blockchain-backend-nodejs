@@ -66,8 +66,8 @@ module.exports.login = function(req, res){
 module.exports.register = function(req, res){
     try {
         let wordsArray = randomWords({exactly: 12});
-        console.log(wordsArray);
-        console.log(wordsArray.join("-"));
+        // console.log(wordsArray);
+        // console.log(wordsArray.join("-"));
         let user = {
             name: req.body.name,
             username: req.body.username,
@@ -76,7 +76,7 @@ module.exports.register = function(req, res){
         }
         User.create(user)
             .then(user => {
-                console.log(user);
+                // console.log(user);
                 let clientUserData = {
                     name: user.name,
                     _id: user._id,
@@ -106,6 +106,7 @@ module.exports.register = function(req, res){
             })
           
     } catch (error) {
+        console.log(error);
         res.json({
             error: error
         })

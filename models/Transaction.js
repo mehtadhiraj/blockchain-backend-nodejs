@@ -6,7 +6,7 @@ const transactionSchema = mongoose.Schema({
         ref: 'User',
         required: true
     },
-    transactioChain: [{
+    transactionChain: [{
         sender: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',
@@ -30,10 +30,15 @@ const transactionSchema = mongoose.Schema({
         status: {
             type: String,
             enum: ['pending', 'fail', 'cancel', 'success']
+        },
+        timeStamp: {
+            type: Date,
+            required: true
         }
     }]
 },{
-    timestamps: true
+    timestamps: true,
+    strict: true
 })
 
 module.exports = mongoose.model("Transaction", transactionSchema);

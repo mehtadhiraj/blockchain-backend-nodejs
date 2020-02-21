@@ -9,7 +9,8 @@ const initDatabase = function () {
   // Connection Configuration for MongoDB
   var options = {
     reconnectTries: 10,
-    useNewUrlParser: true
+    useNewUrlParser: true,
+    useFindAndModify: false
   };
 
   // Promise for connection to MongoDB URI 
