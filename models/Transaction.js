@@ -31,6 +31,17 @@ const transactionSchema = mongoose.Schema({
             type: String,
             enum: ['pending', 'fail', 'cancel', 'success']
         },
+        nonce: {
+            type: Number
+        },
+        hash: {
+            type: String,
+            required: true
+        },
+        action: {
+            type: String,
+            enum: ['sent', 'received']
+        },
         timeStamp: {
             type: Date,
             required: true

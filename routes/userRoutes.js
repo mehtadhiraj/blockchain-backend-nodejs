@@ -14,4 +14,6 @@ router.post('/getaccount', auth.checkLogin, auth.checkUser, userController.getAc
 
 // Initiate transaction
 router.post('/transaction', auth.checkLogin, auth.checkUser, userController.initiateTransaction);
+router.post('/gettransaction', auth.checkLogin, auth.checkUser, userController.gettransaction);
+
 module.exports = router;
