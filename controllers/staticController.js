@@ -84,8 +84,9 @@ module.exports.register = function(req, res){
                 }
                 jwt.sign(clientUserData, process.env.JWT_SECRET_KEY, {expiresIn: '1h'}, (tokenError, token)=> {
                     if(tokenError){
-                        console.log(tokenError);
+                        console.log("fghjk",tokenError);
                         res.json({
+                            status: 204,
                             error: tokenError
                         })
                     }else{
@@ -99,8 +100,9 @@ module.exports.register = function(req, res){
                 })
             })
             .catch(err => {
-                console.log(err);
+                console.log('qwertyuio',err);
                 res.json({
+                    status: 204,
                     error: err
                 })      
             })
@@ -108,6 +110,7 @@ module.exports.register = function(req, res){
     } catch (error) {
         console.log(error);
         res.json({
+            status: 404,
             error: error
         })
     }
