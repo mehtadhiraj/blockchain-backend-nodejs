@@ -24,9 +24,6 @@ const transactionSchema = mongoose.Schema({
         previousHash: {
             type: String,
         },
-        nextHash: {
-            type: String
-        },
         status: {
             type: String,
             enum: ['pending', 'fail', 'cancel', 'success']
@@ -41,10 +38,6 @@ const transactionSchema = mongoose.Schema({
         action: {
             type: String,
             enum: ['sent', 'received']
-        },
-        timeStamp: {
-            type: Date,
-            required: true
         }
     }]
 },{

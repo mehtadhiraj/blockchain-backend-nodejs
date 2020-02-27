@@ -3,6 +3,7 @@ const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const CryptoJs = require("crypto-js");
 const stringify = require('json-stable-stringify');
+const firebase = require('../config/firebase');
 
 module.exports.addAccount = function(req, res){
     try{
@@ -51,22 +52,16 @@ module.exports.getAccount = function(req, res){
 }
 
 // @initiateTransaction functions
-async function setNextHash(transactionChain, hash){
+async function getPreviousHash(transactionChain){
     let lastTransaction = transactionChain.transactionChain[transactionChain.transactionChain.length - 1];
-    let nextHash = hash;
     previousHash = lastTransaction.hash;
-    lastTransaction.nextHash = nextHash;
-    transactionChain.transactionChain[transactionChain.transactionChain.length - 1] = lastTransaction;
-    transactionChain.markModified('transactionChain');
-    await transactionChain.save();
-    // console.log(transactionChain);   
     return previousHash; 
 }
 
-async function updateTransaction(hash, timeStamp, action, req, user, initiator){
+async function addTransaction(hash, action, req, user, initiator){
     let transactionChain = await Transaction.findOne({ userId: initiator });
-    let previousHash = transactionChain ? await setNextHash(transactionChain, hash) : "0";          
-    let transaction = await Transaction.updateOne({ "userId": initiator }, 
+    let previousHash = transactionChain ? await getPreviousHash(transactionChain) : "0";          
+    let transaction = await Transaction.findOneAndUpdate({ "userId": initiator }, 
         { 
             $push: { 
                 transactionChain: {
@@ -74,16 +69,50 @@ async function updateTransaction(hash, timeStamp, action, req, user, initiator){
                     receiver: user._id,
                     amount: req.body.amount,
                     status: req.body.status,
-                    timeStamp: timeStamp,
                     hash: hash,
                     action: action,
                     previousHash: previousHash
                 } 
             } 
         },
-        { upsert: true, runValidators: true });
+        { upsert: true, runValidators: true, new: true });
 
     return transaction;
+}
+
+async function updateTransaction(id, status, nonce){
+    return await Transaction.findOneAndUpdate({ 'transactionChain._id': id}, { $set: { 'transactionChain.$.status': status, 'transactionChain.$.nonce': nonce } });
+}
+
+async function validateTransaction(nonceArray, senderTransactionId, receiverTransactionId){
+    var nonceFrequency = {};
+    var maxEl = nonceArray[0], maxCount = 1;
+    for(var i = 0; i < nonceArray.length; i++)
+    {
+        var el = nonceArray[i];
+        if(nonceFrequency[el] == null)
+            nonceFrequency[el] = 1;
+        else
+            nonceFrequency[el]++;  
+        if(nonceFrequency[el] > maxCount)
+        {
+            maxEl = el;
+            maxCount = nonceFrequency[el];
+        }
+    }
+    if(maxCount > nonceArray.length/2){
+        let status = 'success';
+        let nonce = maxEl;
+        await updateTransaction(senderTransactionId, status, nonce);
+        await updateTransaction(receiverTransactionId, status, nonce);
+    }else{
+        let status = 'fail';
+        let nonce = -1;
+        await updateTransaction(senderTransactionId, status, nonce);
+        await updateTransaction(receiverTransactionId, status, nonce);
+    }
+
+    return;
 }
 
 module.exports.initiateTransaction = async function(req, res){
@@ -96,18 +125,44 @@ module.exports.initiateTransaction = async function(req, res){
                 message: "Requested receiver does not exist"
             })
         }else{
+            // console.log(user);
             let timeStamp = Date.now();
             let block = {
                 sender: req.body.userId,
-                receiver: user._id,
+                receiver: user['_id'].toString(),
                 amount: req.body.amount,
                 timeStamp: timeStamp
             }  
+            // console.log(block);
             let hash = await CryptoJs.SHA256(stringify(block)).toString(CryptoJs.enc.Hex);
-            let senderTransaction = await updateTransaction(hash, timeStamp, 'sent', req, user, req.body.userId);
-            let receiverTransaction = await updateTransaction(hash, timeStamp, 'received', req, user, user._id);
-            // console.log({senderTransaction, receiverTransaction});
+            let senderTransaction = await addTransaction(hash, 'sent', req, user, req.body.userId);
+            let receiverTransaction = await addTransaction(hash, 'received', req, user, user._id);
+            // console.log(senderTransaction, receiverTransaction);
             if(senderTransaction && receiverTransaction){
+                let senderTransactionId = senderTransaction.transactionChain[senderTransaction.transactionChain.length - 1]._id.toString();
+                let receiverTransactionId = receiverTransaction.transactionChain[receiverTransaction.transactionChain.length - 1]._id.toString();
+                let minnerData = {
+                    senderTransactionId: senderTransactionId,
+                    receiverTransactionId: receiverTransactionId,
+                    hash: hash,
+                    nonce: []
+                }
+                // console.log(minnerData);
+                let ref = firebase.ref('/transactions/'+senderTransactionId+'-'+receiverTransactionId);
+                ref.set(minnerData);
+                setTimeout(async ()=>{
+                    await ref.once('value', async function(snapshot){
+                        console.log(snapshot.val());
+                        let nonceJson = snapshot.val().nonce;
+                        let nonceKeys = Object.keys(nonceJson);
+                        let nonceArray = nonceKeys.map(key => {
+                            return nonceJson[key];
+                        })
+                        console.log(nonceArray);
+                        await validateTransaction(nonceArray, senderTransactionId, receiverTransactionId);
+                    });
+                    ref.remove();
+                }, 60000)
                 res.json({
                     status: 200,
                     message: "Transaction Successfull."
@@ -128,14 +183,14 @@ module.exports.gettransaction = async function(req, res){
         // console.log(req.body);
         let transaction = await Transaction.findOne({ userId: req.body.userId }).populate('transactionChain.sender').populate('transactionChain.receiver');
         if(transaction){
-            console.log(transaction.transactionChain);
+            // console.log(transaction.transactionChain);
             res.json({
                 status: 202,
                 transactionChain: transaction.transactionChain
             })
         }
     } catch (error) {
-        console.log(error);
+        // console.log(error);
         res.json({
             status: 204,
             message: error.message

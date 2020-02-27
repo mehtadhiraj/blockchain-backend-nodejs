@@ -18,7 +18,7 @@ module.exports.home = function(req, res){
 
 module.exports.login = function(req, res){
     try {
-        console.log(req.body);
+        // console.log(req.body);
         User.findOne({username: req.body.username}, (userError, user)=>{
             if(user){
                 user.comparePassword(req.body.password, function(pswdError, isMatch){
@@ -84,7 +84,7 @@ module.exports.register = function(req, res){
                 }
                 jwt.sign(clientUserData, process.env.JWT_SECRET_KEY, {expiresIn: '1h'}, (tokenError, token)=> {
                     if(tokenError){
-                        console.log("fghjk",tokenError);
+                        // console.log(tokenError);
                         res.json({
                             status: 204,
                             error: tokenError
@@ -100,7 +100,7 @@ module.exports.register = function(req, res){
                 })
             })
             .catch(err => {
-                console.log('qwertyuio',err);
+                // console.log(err);
                 res.json({
                     status: 204,
                     error: err
@@ -108,7 +108,7 @@ module.exports.register = function(req, res){
             })
           
     } catch (error) {
-        console.log(error);
+        // console.log(error);
         res.json({
             status: 404,
             error: error
