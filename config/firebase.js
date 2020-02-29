@@ -3,7 +3,7 @@ let serviceAccount = require("./blockchain-banking.json");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://blockchain-banking.firebaseio.com"
+  databaseURL: process.env.FIREBASE_URL
 });
 
 let db = admin.database();
