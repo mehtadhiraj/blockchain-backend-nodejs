@@ -44,6 +44,7 @@ module.exports.login = function(req, res){
                         })
                     }else{
                         res.json({
+                            status: 204,
                             error: pswdError,
                             message: "Invalid Credentials."
                         })
@@ -51,6 +52,7 @@ module.exports.login = function(req, res){
                 })
             }else{
                 res.json({
+                    status: 204,
                     error: userError,
                     message: "User does not exist."
                 })

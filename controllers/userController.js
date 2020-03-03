@@ -152,20 +152,30 @@ module.exports.initiateTransaction = async function(req, res){
                 ref.set(minnerData);
                 setTimeout(async ()=>{
                     await ref.once('value', async function(snapshot){
-                        console.log(snapshot.val());
+                        // console.log(snapshot.val());
                         let nonceJson = snapshot.val().nonce;
-                        let nonceKeys = Object.keys(nonceJson);
-                        let nonceArray = nonceKeys.map(key => {
-                            return nonceJson[key];
-                        })
-                        console.log(nonceArray);
-                        await validateTransaction(nonceArray, senderTransactionId, receiverTransactionId);
+                        if(!nonceJson){
+                            ref.remove();
+                            let status = 'fail';
+                            let nonce = -1;
+                            await updateTransaction(senderTransactionId, status, nonce);
+                            await updateTransaction(receiverTransactionId, status, nonce);
+                        }else{
+                            let nonceKeys = Object.keys(nonceJson);
+                            let nonceArray = nonceKeys.map(key => {
+                                return nonceJson[key];
+                            })
+                            // console.log(nonceArray);
+                            console.log("Validating Transactions...");
+                            await validateTransaction(nonceArray, senderTransactionId, receiverTransactionId);
+                            console.log("Transaction Validated.");
+                        }
                     });
                     ref.remove();
-                }, 60000)
+                }, 30000)
                 res.json({
                     status: 200,
-                    message: "Transaction Successfull."
+                    message: "Transaction In Process."
                 })
             } 
         }

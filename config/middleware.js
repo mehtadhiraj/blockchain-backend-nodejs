@@ -1,9 +1,9 @@
-var express = require('express');
-const path = require('path');
-const cookieParser = require('cookie-parser');
-const logger = require('morgan');
-const cors = require('cors');
-const responseTime = require('response-time')
+const express       = require('express');
+const path          = require('path');
+const cookieParser  = require('cookie-parser');
+const logger        = require('morgan');
+const cors          = require('cors');
+const responseTime  = require('response-time')
 
 module.exports = function initMiddleware(app){
 
