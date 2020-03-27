@@ -36,7 +36,7 @@ module.exports.login = function(req, res){
                             }else{
                                 res.json({
                                     status: 202,
-                                    message: "Loged in successfully.",
+                                    message: "Logged in successfully.",
                                     token,
                                     user: userDetails
                                 })

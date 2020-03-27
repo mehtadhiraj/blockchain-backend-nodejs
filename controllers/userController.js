@@ -1,9 +1,10 @@
-const Account = require('../models/Account');
-const Transaction = require('../models/Transaction');
-const User = require('../models/User');
-const CryptoJs = require("crypto-js");
-const stringify = require('json-stable-stringify');
-const firebase = require('../config/firebase');
+const Account         = require('../models/Account');
+const Transaction     = require('../models/Transaction');
+const User            = require('../models/User');
+const transaction     = require('./transactionFunctions');
+const CryptoJs        = require("crypto-js");
+const stringify       = require('json-stable-stringify');
+const firebase        = require('../config/firebase');
 
 module.exports.addAccount = function(req, res){
     try{
@@ -51,70 +52,6 @@ module.exports.getAccount = function(req, res){
     }
 }
 
-// @initiateTransaction functions
-async function getPreviousHash(transactionChain){
-    let lastTransaction = transactionChain.transactionChain[transactionChain.transactionChain.length - 1];
-    previousHash = lastTransaction.hash;
-    return previousHash; 
-}
-
-async function addTransaction(hash, action, req, user, initiator){
-    let transactionChain = await Transaction.findOne({ userId: initiator });
-    let previousHash = transactionChain ? await getPreviousHash(transactionChain) : "0";          
-    let transaction = await Transaction.findOneAndUpdate({ "userId": initiator }, 
-        { 
-            $push: { 
-                transactionChain: {
-                    sender: req.body.userId,
-                    receiver: user._id,
-                    amount: req.body.amount,
-                    status: req.body.status,
-                    hash: hash,
-                    action: action,
-                    previousHash: previousHash
-                } 
-            } 
-        },
-        { upsert: true, runValidators: true, new: true });
-
-    return transaction;
-}
-
-async function updateTransaction(id, status, nonce){
-    return await Transaction.findOneAndUpdate({ 'transactionChain._id': id}, { $set: { 'transactionChain.$.status': status, 'transactionChain.$.nonce': nonce } });
-}
-
-async function validateTransaction(nonceArray, senderTransactionId, receiverTransactionId){
-    var nonceFrequency = {};
-    var maxEl = nonceArray[0], maxCount = 1;
-    for(var i = 0; i < nonceArray.length; i++)
-    {
-        var el = nonceArray[i];
-        if(nonceFrequency[el] == null)
-            nonceFrequency[el] = 1;
-        else
-            nonceFrequency[el]++;  
-        if(nonceFrequency[el] > maxCount)
-        {
-            maxEl = el;
-            maxCount = nonceFrequency[el];
-        }
-    }
-    if(maxCount > nonceArray.length/2){
-        let status = 'success';
-        let nonce = maxEl;
-        await updateTransaction(senderTransactionId, status, nonce);
-        await updateTransaction(receiverTransactionId, status, nonce);
-    }else{
-        let status = 'fail';
-        let nonce = -1;
-        await updateTransaction(senderTransactionId, status, nonce);
-        await updateTransaction(receiverTransactionId, status, nonce);
-    }
-
-    return;
-}
-
 module.exports.initiateTransaction = async function(req, res){
     try{
         // console.log(req.body);
@@ -135,8 +72,8 @@ module.exports.initiateTransaction = async function(req, res){
             }  
             // console.log(block);
             let hash = await CryptoJs.SHA256(stringify(block)).toString(CryptoJs.enc.Hex);
-            let senderTransaction = await addTransaction(hash, 'sent', req, user, req.body.userId);
-            let receiverTransaction = await addTransaction(hash, 'received', req, user, user._id);
+            let senderTransaction = await transaction.addTransaction(hash, 'sent', req, user, req.body.userId);
+            let receiverTransaction = await transaction.addTransaction(hash, 'received', req, user, user._id);
             // console.log(senderTransaction, receiverTransaction);
             if(senderTransaction && receiverTransaction){
                 let senderTransactionId = senderTransaction.transactionChain[senderTransaction.transactionChain.length - 1]._id.toString();
@@ -158,8 +95,8 @@ module.exports.initiateTransaction = async function(req, res){
                             ref.remove();
                             let status = 'fail';
                             let nonce = -1;
-                            await updateTransaction(senderTransactionId, status, nonce);
-                            await updateTransaction(receiverTransactionId, status, nonce);
+                            await transaction.updateTransaction(senderTransactionId, status, nonce);
+                            await transaction.updateTransaction(receiverTransactionId, status, nonce);
                         }else{
                             let nonceKeys = Object.keys(nonceJson);
                             let nonceArray = nonceKeys.map(key => {
@@ -167,7 +104,7 @@ module.exports.initiateTransaction = async function(req, res){
                             })
                             // console.log(nonceArray);
                             console.log("Validating Transactions...");
-                            await validateTransaction(nonceArray, senderTransactionId, receiverTransactionId);
+                            await transaction.validateTransaction(nonceArray, senderTransactionId, receiverTransactionId);
                             console.log("Transaction Validated.");
                         }
                     });
