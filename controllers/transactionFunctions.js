@@ -1,69 +1,128 @@
-const Transaction = require('../models/Transaction');
-
-async function getPreviousHash(transactionChain){
+const crypto          = require('crypto'),
+      Transaction     = require('../models/Transaction');
+    
+function getPreviousHash(transactionChain){
     let lastTransaction = transactionChain.transactionChain[transactionChain.transactionChain.length - 1];
     previousHash = lastTransaction.hash;
     return previousHash; 
 }
 
-async function addTransaction(hash, action, req, user, initiator){
-    let transactionChain = await Transaction.findOne({ userId: initiator });
-    let previousHash = transactionChain ? await getPreviousHash(transactionChain) : "0";          
-    let transaction = await Transaction.findOneAndUpdate({ "userId": initiator }, 
-        { 
-            $push: { 
-                transactionChain: {
-                    sender: req.body.userId,
-                    receiver: user._id,
-                    amount: req.body.amount,
-                    status: req.body.status,
-                    hash: hash,
-                    action: action,
-                    previousHash: previousHash
+async function encrypt(password, chain){
+    // console.log({chain});
+    let key = crypto.createCipher('aes-128-cbc', password);
+    chain = JSON.stringify(chain);
+    let hash = key.update(chain, 'utf8', 'hex');
+    hash = await hash + key.final('hex');
+    // console.log({hash});
+    return hash;
+}
+
+async function decrypt(password, hash) {
+    let key = crypto.createDecipher('aes-128-cbc', password);
+    let chain = key.update(hash, 'hex', 'utf8');
+    chain = chain + key.final('utf8');
+    chain = JSON.parse(chain);
+    console.log('decrypt')
+    console.log(chain);
+    return chain;
+}
+
+async function retrieveFirebase(ref, key){
+    let snapArray = [];
+    await ref.once("value", (snapshot)=>{
+        // console.log(snapshot.val());
+        let snapJson = snapshot.val()[key];
+        if(!snapJson){
+            ref.remove();
+            this.snapArray = [];
+        }else{
+            let snapKeys = Object.keys(snapJson);
+            let snapArray = snapKeys.map(index => {
+                return snapJson[index];
+            })
+            this.snapArray = snapArray;
+            // console.log(snapArray);
+        }
+    });
+    await ref.remove();
+    return this.snapArray;
+}
+
+async function validateChain(password, chain, minnerChainArray, id) {
+    let validationData = await validateTransaction(minnerChainArray);
+    let validChain = validationData.maxEl;
+    if(validChain != chain){
+        validChain = await decrypt(password, validChain);
+        await Transaction.findOneAndUpdate({ userId: id }, { $set: { transactionChain: validChain } }, { upsert: true, runValidators: true, new: true } );
+    }
+    validationData.maxEl = validChain;
+    return validationData;
+
+}
+
+async function getTransaction(userId){
+    let transactionDetails = await Transaction.findOne({ userId: userId })
+    console.log({ userId, transactionDetails });
+    return transactionDetails;
+}
+
+async function addTransaction(hash, action, block, initiator){
+    try{
+        let transactionChain = await getTransaction(initiator);
+        let previousHash = transactionChain ? await getPreviousHash(transactionChain) : "0";          
+        let transaction = await Transaction.findOneAndUpdate({ "userId": initiator }, 
+            { 
+                $push: { 
+                    transactionChain: {
+                        sender: block.sender,
+                        receiver: block.receiver,
+                        amount: block.amount,
+                        status: block.status,
+                        hash: hash,
+                        action: action,
+                        nonce: block.nonce,
+                        previousHash: previousHash
+                    } 
                 } 
-            } 
-        },
-        { upsert: true, runValidators: true, new: true });
+            },
+            { upsert: true, runValidators: true, new: true });
 
-    return transaction;
+        return transaction;
+    }
+    catch (error) {
+        console.log(error);
+        return null;    
+    }
 }
 
-async function updateTransaction(id, status, nonce){
-    return await Transaction.findOneAndUpdate({ 'transactionChain._id': id}, { $set: { 'transactionChain.$.status': status, 'transactionChain.$.nonce': nonce } });
-}
+// async function updateTransaction(id, status, nonce){
+//     return await Transaction.findOneAndUpdate({ 'transactionChain._id': id}, { $set: { 'transactionChain.$.status': status, 'transactionChain.$.nonce': nonce } });
+// }
 
-async function validateTransaction(nonceArray, senderTransactionId, receiverTransactionId){
-    var nonceFrequency = {};
-    var maxEl = nonceArray[0], maxCount = 1;
-    for(var i = 0; i < nonceArray.length; i++)
-    {
-        var el = nonceArray[i];
-        if(nonceFrequency[el] == null)
-            nonceFrequency[el] = 1;
+async function validateTransaction(dataArray){
+    let frequency = {};
+    let maxEl = dataArray[0], maxCount = 1;
+    for(let i = 0; i < dataArray.length; i++){
+        let el = dataArray[i];
+        if(frequency[el] == null)
+            frequency[el] = 1;
         else
-            nonceFrequency[el]++;  
-        if(nonceFrequency[el] > maxCount){
+            frequency[el]++;  
+        if(frequency[el] > maxCount){
             maxEl = el;
-            maxCount = nonceFrequency[el];
+            maxCount = frequency[el];
         }
     }
-    if(maxCount > nonceArray.length/2){
-        let status = 'success';
-        let nonce = maxEl;
-        await updateTransaction(senderTransactionId, status, nonce);
-        await updateTransaction(receiverTransactionId, status, nonce);
-    }else{
-        let status = 'fail';
-        let nonce = -1;
-        await updateTransaction(senderTransactionId, status, nonce);
-        await updateTransaction(receiverTransactionId, status, nonce);
-    }
-
-    return;
+    let result = (maxCount > dataArray.length/2) ? { maxEl: maxEl, maxCount: maxCount } : { maxEl: -1, maxCount: -1 };
+    return result;
 }
 
 module.exports = {
     addTransaction,
     validateTransaction,
-    updateTransaction
+    // updateTransaction,
+    // getTransaction,
+    validateChain,
+    encrypt,
+    retrieveFirebase
 }
