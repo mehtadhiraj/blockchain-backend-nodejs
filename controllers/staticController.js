@@ -67,9 +67,11 @@ module.exports.login = function(req, res){
 
 module.exports.register = function(req, res){
     try {
-        let wordsArray = randomWords({exactly: 12});
-        // console.log(wordsArray);
-        // console.log(wordsArray.join("-"));
+        let wordsArray = randomWords({exactly: 11});
+        let timeStamp = Date.now().toString();
+        wordsArray.push(timeStamp);
+        console.log({ wordsArray, timeStamp });
+        console.log(wordsArray.join("-"));
         let user = {
             name: req.body.name,
             username: req.body.username,

@@ -52,105 +52,6 @@ module.exports.getAccount = function(req, res){
     }
 }
 
-// module.exports.initiateTransaction = async function(req, res){
-//     try{
-//         // console.log(req.body);
-//         let user = await User.findOne({ username: req.body.receiver });
-//         let initiator = await User.findOne({ _id: req.body.userId });
-//         if(!user){
-//             res.json({
-//                 status: 204,
-//                 message: "Requested receiver does not exist"
-//             })
-//         }else{
-//             // console.log({ user, initiator });
-//             let senderPassword = initiator.password;
-//             let receiverPassword = user.password;
-//             // let senderTransaction = await transaction.getTransaction(initiator._id);
-//             // senderTransaction = senderTransaction ? senderTransaction : { transactionChain: [] };
-//             // let receiverTransaction = await transaction.getTransaction(user._id);
-//             // receiverTransaction = receiverTransaction ? receiverTransaction : { transactionChain: [] };
-//             let timeStamp = Date.now();
-//             let block = {
-//                 sender: req.body.userId,
-//                 receiver: user['_id'].toString(),
-//                 amount: req.body.amount,
-//                 timeStamp: timeStamp
-//             }  
-//             // console.log(block);
-//             let hash = await CryptoJs.SHA256(stringify(block)).toString(CryptoJs.enc.Hex);
-//             let senderTransaction = await transaction.addTransaction(hash, 'sent', req, user, req.body.userId);
-//             let receiverTransaction = await transaction.addTransaction(hash, 'received', req, user, user._id);
-//             console.log(senderTransaction, receiverTransaction);
-//             let senderChain = [...senderTransaction.transactionChain];
-//             senderChain.pop();
-//             let receiverChain = [...receiverTransaction.transactionChain];
-//             receiverChain.pop();
-//             console.log({ senderChain, receiverChain });
-//             console.log(senderTransaction, receiverTransaction);
-//             if(senderTransaction && receiverTransaction){
-//                 let senderTransactionId = senderTransaction.transactionChain[senderTransaction.transactionChain.length - 1]._id.toString();
-//                 let receiverTransactionId = receiverTransaction.transactionChain[receiverTransaction.transactionChain.length - 1]._id.toString();
-//                 let minnerData = {
-//                     senderTransactionId: senderTransactionId,
-//                     receiverTransactionId: receiverTransactionId,
-//                     hash: hash,
-//                     nonce: []
-//                 }
-//                 // console.log(minnerData);
-//                 let ref = firebase.ref('/transactions/'+senderTransactionId+'-'+receiverTransactionId);
-//                 let senderRef = firebase.ref('transactions/'+initiator._id);
-//                 let receiverRef = firebase.ref('transactions/'+user._id);
-//                 let senderChainEncrypt = await transaction.encrypt(senderPassword, senderChain);
-//                 let receiverChainEncrypt = await transaction.encrypt(receiverPassword, receiverChain);
-//                 console.log({ senderChainEncrypt, receiverChainEncrypt });
-//                 ref.set(minnerData);
-//                 senderRef.set({ encryptedChain: senderChainEncrypt });
-//                 receiverRef.set({ encryptedChain: receiverChainEncrypt });
-//                 setTimeout(async ()=>{
-//                     await ref.once('value', async function(snapshot){
-//                         // console.log(snapshot.val());
-//                         let nonceJson = snapshot.val().nonce;
-//                         if(!nonceJson){
-//                             ref.remove();
-//                             let status = 'fail';
-//                             let nonce = -1;
-//                             await transaction.updateTransaction(senderTransactionId, status, nonce);
-//                             await transaction.updateTransaction(receiverTransactionId, status, nonce);
-//                         }else{
-//                             let senderChainValidation = await transaction.validateChain(senderPassword, senderChainEncrypt, initiator._id, senderRef);
-//                             let receiverChainalidation = await transaction.validateChain(receiverPassword, receiverChainEncrypt, user._id, receiverRef);
-//                             console.log({ senderChainValidation, receiverChainalidation });                
-//                             let nonceKeys = Object.keys(nonceJson);
-//                             let nonceArray = nonceKeys.map(key => {
-//                                 return nonceJson[key];
-//                             })
-//                             // console.log(nonceArray);
-//                             console.log("Validating Transactions...");
-//                             let nonce = await transaction.validateTransaction(nonceArray, senderTransactionId, receiverTransactionId);
-//                             let status = ( nonce.maxEl != -1 && (senderChainValidation.maxCount == receiverChainalidation.maxCount == nonce.maxCount) ) ? 'success' : 'fail';
-//                             await transaction.updateTransaction(senderTransactionId, status, nonce.maxEl);
-//                             await transaction.updateTransaction(receiverTransactionId, status, nonce.maxEl);
-//                             console.log("Transaction Validated.");
-//                         }
-//                     });
-//                     ref.remove();
-//                 }, 30000)
-//                 res.json({
-//                     status: 200,
-//                     message: "Transaction In Process."
-//                 })
-//             } 
-//         }
-//     }catch(error){
-//         // console.log(error);
-//         res.json({
-//             status: 204,
-//             message: error.message
-//         })
-//     }
-// }
-
 module.exports.initiateTransaction = async function(req, res){
     try {
         /* 
@@ -182,9 +83,9 @@ module.exports.initiateTransaction = async function(req, res){
         // console.log({ sender, receiver });
         
         // 2. Get user passwords
-        let senderPassword = sender.password;
-        let receiverPassword = receiver.password;
-        // console.log({ senderPassword, receiverPassword });
+        let senderPassword = sender.privateKey;
+        let receiverPassword = receiver.privateKey;
+        console.log({ senderPassword, receiverPassword });
 
         // 3. Get the current transaction details of sender and receiver
         let transactionDetails = await Transaction.find({$or : [ { userId: sender._id }, { userId: receiver._id } ] } );
@@ -239,7 +140,7 @@ module.exports.initiateTransaction = async function(req, res){
             // 10. Validating chain by finding maximum occurence of chain
             let senderChainValidation = await transaction.validateChain(senderPassword, senderChainEncrypt, this.senderChainArray, sender._id);
             let receiverChainValidation = await transaction.validateChain(receiverPassword, receiverChainEncrypt, this.receiverChainArray, receiver._id);
-            // console.log({ senderChainValidation, receiverChainValidation, nonceValidation });
+            console.log({ senderChainValidation, receiverChainValidation, nonceValidation });
             
             // 11. check whether all the max counts for block and chain are equal
             if( senderChainValidation.maxCount == receiverChainValidation.maxCount == nonceValidation.maxCount && senderChainValidation.maxEl != -1 && receiverChainValidation.maxEl != -1 && nonceValidation.maxEl != -1 ){
@@ -266,12 +167,21 @@ module.exports.initiateTransaction = async function(req, res){
                 broadCastRef.remove();
                 senderRef.set({chain: senderChainEncrypt});
                 receiverRef.set({chain: receiverChainEncrypt});
+                res.json({
+                    status: 200,
+                    message: "Transaction Successfull."
+                })
+            }else{
+                res.json({
+                    status: 204,
+                    message: "Transaction Failed!!"
+                })
             }
         }, 30000)         
-        res.json({
-            status: 200,
-            message: "Reload your page after 1 miunte. We are processing transaction..."
-        })
+        // res.json({
+        //     status: 200,
+        //     message: "Reload your page after 1 miunte. We are processing transaction..."
+        // })
     } catch (error) {
         // console.log(error.message);
         res.json({

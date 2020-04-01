@@ -18,13 +18,19 @@ async function encrypt(password, chain){
 }
 
 async function decrypt(password, hash) {
-    let key = crypto.createDecipher('aes-128-cbc', password);
-    let chain = key.update(hash, 'hex', 'utf8');
-    chain = chain + key.final('utf8');
-    chain = JSON.parse(chain);
-    console.log('decrypt')
-    console.log(chain);
-    return chain;
+    try{
+        let key = crypto.createDecipher('aes-128-cbc', password);
+        let chain = key.update(hash, 'hex', 'utf8');
+        chain = chain + key.final('utf8');
+        chain = JSON.parse(chain);
+        // console.log('decrypt')
+        // console.log(chain);
+        return chain;
+    }
+    catch (error){
+        console.log(error.message);
+        return error;
+    }    
 }
 
 async function retrieveFirebase(ref, key){
@@ -53,11 +59,15 @@ async function validateChain(password, chain, minnerChainArray, id) {
     let validChain = validationData.maxEl;
     if(validChain != chain){
         validChain = await decrypt(password, validChain);
-        await Transaction.findOneAndUpdate({ userId: id }, { $set: { transactionChain: validChain } }, { upsert: true, runValidators: true, new: true } );
-    }
-    validationData.maxEl = validChain;
-    return validationData;
-
+        console.log({ validChain });
+        if(!validChain.message)
+            await Transaction.findOneAndUpdate({ userId: id }, { $set: { transactionChain: validChain } }, { upsert: true, runValidators: true, new: true } );
+            validationData.maxEl = validChain;
+            return validationData;
+        }else{
+            return { maxEl: -1, maxCount: -1 }
+        }
+    
 }
 
 async function getTransaction(userId){
@@ -69,7 +79,7 @@ async function getTransaction(userId){
 async function addTransaction(hash, action, block, initiator){
     try{
         let transactionChain = await getTransaction(initiator);
-        let previousHash = transactionChain ? await getPreviousHash(transactionChain) : "0";          
+        let previousHash = transactionChain.length ? await getPreviousHash(transactionChain) : "0";          
         let transaction = await Transaction.findOneAndUpdate({ "userId": initiator }, 
             { 
                 $push: { 
