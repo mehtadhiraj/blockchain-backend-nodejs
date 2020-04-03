@@ -85,11 +85,11 @@ module.exports.initiateTransaction = async function(req, res){
         // 2. Get user passwords
         let senderPassword = sender.privateKey;
         let receiverPassword = receiver.privateKey;
-        console.log({ senderPassword, receiverPassword });
+        // console.log({ senderPassword, receiverPassword });
 
         // 3. Get the current transaction details of sender and receiver
         let transactionDetails = await Transaction.find({$or : [ { userId: sender._id }, { userId: receiver._id } ] } );
-        // console.log(transactionDetails); 
+        // console.log({ transactionDetails }); 
         let senderTransaction = transactionDetails[0] ? transactionDetails[0] : {transactionChain: []};
         let receiverTransaction = transactionDetails[1] ? transactionDetails[1] : {transactionChain: []};
         // console.log({ senderTransaction, receiverTransaction });
@@ -140,7 +140,7 @@ module.exports.initiateTransaction = async function(req, res){
             // 10. Validating chain by finding maximum occurence of chain
             let senderChainValidation = await transaction.validateChain(senderPassword, senderChainEncrypt, this.senderChainArray, sender._id);
             let receiverChainValidation = await transaction.validateChain(receiverPassword, receiverChainEncrypt, this.receiverChainArray, receiver._id);
-            console.log({ senderChainValidation, receiverChainValidation, nonceValidation });
+            // console.log({ senderChainValidation, receiverChainValidation, nonceValidation });
             
             // 11. check whether all the max counts for block and chain are equal
             if( senderChainValidation.maxCount == receiverChainValidation.maxCount == nonceValidation.maxCount && senderChainValidation.maxEl != -1 && receiverChainValidation.maxEl != -1 && nonceValidation.maxEl != -1 ){
@@ -169,19 +169,15 @@ module.exports.initiateTransaction = async function(req, res){
                 receiverRef.set({chain: receiverChainEncrypt});
                 res.json({
                     status: 200,
-                    message: "Transaction Successfull."
+                    message: "Transaction Successfull.\n-->Sender: "+sender.username+"\n-->Receiver: "+receiver.username+"\n-->Amount: "+block.amount.toString()
                 })
             }else{
                 res.json({
                     status: 204,
-                    message: "Transaction Failed!!"
+                    message: "Transaction Failed!!\n-->Sender: "+sender.username+"\n-->Receiver: "+receiver.username+"\n-->Amount: "+block.amount.toString()
                 })
             }
         }, 30000)         
-        // res.json({
-        //     status: 200,
-        //     message: "Reload your page after 1 miunte. We are processing transaction..."
-        // })
     } catch (error) {
         // console.log(error.message);
         res.json({

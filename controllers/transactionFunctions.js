@@ -34,24 +34,29 @@ async function decrypt(password, hash) {
 }
 
 async function retrieveFirebase(ref, key){
-    let snapArray = [];
-    await ref.once("value", (snapshot)=>{
-        // console.log(snapshot.val());
-        let snapJson = snapshot.val()[key];
-        if(!snapJson){
-            ref.remove();
-            this.snapArray = [];
-        }else{
-            let snapKeys = Object.keys(snapJson);
-            let snapArray = snapKeys.map(index => {
-                return snapJson[index];
-            })
-            this.snapArray = snapArray;
-            // console.log(snapArray);
-        }
-    });
-    await ref.remove();
-    return this.snapArray;
+    try{
+        let snapArray = [];
+        await ref.once("value", (snapshot)=>{
+            // console.log(snapshot.val());
+            let snapJson = snapshot.val()[key];
+            if(!snapJson){
+                ref.remove();
+                this.snapArray = [];
+            }else{
+                let snapKeys = Object.keys(snapJson);
+                let snapArray = snapKeys.map(index => {
+                    return snapJson[index];
+                })
+                this.snapArray = snapArray;
+                // console.log(snapArray);
+            }
+        });
+        await ref.remove();
+        return this.snapArray;
+    }
+    catch(error){
+        return null
+    }
 }
 
 async function validateChain(password, chain, minnerChainArray, id) {
@@ -60,14 +65,16 @@ async function validateChain(password, chain, minnerChainArray, id) {
     if(validChain != chain){
         validChain = await decrypt(password, validChain);
         console.log({ validChain });
-        if(!validChain.message)
+        if(!validChain.message){
             await Transaction.findOneAndUpdate({ userId: id }, { $set: { transactionChain: validChain } }, { upsert: true, runValidators: true, new: true } );
-            validationData.maxEl = validChain;
+            // validationData.maxEl = validChain;
             return validationData;
         }else{
             return { maxEl: -1, maxCount: -1 }
         }
-    
+    }else{
+        return validationData;
+    }
 }
 
 async function getTransaction(userId){
@@ -79,7 +86,7 @@ async function getTransaction(userId){
 async function addTransaction(hash, action, block, initiator){
     try{
         let transactionChain = await getTransaction(initiator);
-        let previousHash = transactionChain.length ? await getPreviousHash(transactionChain) : "0";          
+        let previousHash = transactionChain ? await getPreviousHash(transactionChain) : "0";          
         let transaction = await Transaction.findOneAndUpdate({ "userId": initiator }, 
             { 
                 $push: { 
@@ -111,20 +118,24 @@ async function addTransaction(hash, action, block, initiator){
 
 async function validateTransaction(dataArray){
     let frequency = {};
-    let maxEl = dataArray[0], maxCount = 1;
-    for(let i = 0; i < dataArray.length; i++){
-        let el = dataArray[i];
-        if(frequency[el] == null)
-            frequency[el] = 1;
-        else
-            frequency[el]++;  
-        if(frequency[el] > maxCount){
-            maxEl = el;
-            maxCount = frequency[el];
+    if(dataArray.length > 0){
+        let maxEl = dataArray[0], maxCount = 1;
+        for(let i = 0; i < dataArray.length; i++){
+            let el = dataArray[i];
+            if(frequency[el] == null)
+                frequency[el] = 1;
+            else
+                frequency[el]++;  
+            if(frequency[el] > maxCount){
+                maxEl = el;
+                maxCount = frequency[el];
+            }
         }
+        let result = (maxCount > dataArray.length/2) ? { maxEl: maxEl, maxCount: maxCount } : { maxEl: -1, maxCount: -1 };
+        return result;
+    }else{
+        return { maxEl: -1, maxCount: -1 };
     }
-    let result = (maxCount > dataArray.length/2) ? { maxEl: maxEl, maxCount: maxCount } : { maxEl: -1, maxCount: -1 };
-    return result;
 }
 
 module.exports = {
