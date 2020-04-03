@@ -5,6 +5,7 @@ const transaction     = require('./transactionFunctions');
 const CryptoJs        = require("crypto-js");
 const stringify       = require('json-stable-stringify');
 const firebase        = require('../config/firebase');
+let activeTransaction = {};
 
 module.exports.addAccount = function(req, res){
     try{
@@ -80,7 +81,17 @@ module.exports.initiateTransaction = async function(req, res){
             throw new Error("Receiver does not exist.");
         
         let sender = await User.findById({ _id: req.body.userId });
-        // console.log({ sender, receiver });
+        console.log({ sender, receiver });
+        if(sender._id.toString() === receiver._id.toString())
+            throw new Error("Self Transfer of money cannot be done");
+
+        if(activeTransaction[sender._id] || activeTransaction[receiver._id])
+            throw new Error("Server busy. Please try again later.");
+        else{   
+            activeTransaction[sender._id] = sender._id;
+            activeTransaction[receiver._id] = receiver._id;
+            console.log({activeTransaction});
+        }
         
         // 2. Get user passwords
         let senderPassword = sender.privateKey;
@@ -167,11 +178,15 @@ module.exports.initiateTransaction = async function(req, res){
                 broadCastRef.remove();
                 senderRef.set({chain: senderChainEncrypt});
                 receiverRef.set({chain: receiverChainEncrypt});
+                delete activeTransaction[sender._id];
+                delete activeTransaction[receiver._id];
                 res.json({
                     status: 200,
                     message: "Transaction Successfull.\n-->Sender: "+sender.username+"\n-->Receiver: "+receiver.username+"\n-->Amount: "+block.amount.toString()
                 })
             }else{
+                delete activeTransaction[sender._id];
+                delete activeTransaction[receiver._id];
                 res.json({
                     status: 204,
                     message: "Transaction Failed!!\n-->Sender: "+sender.username+"\n-->Receiver: "+receiver.username+"\n-->Amount: "+block.amount.toString()
