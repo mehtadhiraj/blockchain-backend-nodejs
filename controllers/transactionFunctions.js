@@ -8,7 +8,7 @@ function getPreviousHash(transactionChain){
 }
 
 async function encrypt(password, chain){
-    // console.log({chain});
+    // console.log({ password, chain });
     let key = crypto.createCipher('aes-128-cbc', password);
     chain = JSON.stringify(chain);
     let hash = key.update(chain, 'utf8', 'hex');
@@ -28,7 +28,7 @@ async function decrypt(password, hash) {
         return chain;
     }
     catch (error){
-        console.log(error.message);
+        // console.log(error.message);
         return error;
     }    
 }
@@ -51,7 +51,7 @@ async function retrieveFirebase(ref, key){
                 // console.log(snapArray);
             }
         });
-        await ref.remove();
+        // await ref.remove();
         return this.snapArray;
     }
     catch(error){
@@ -64,7 +64,7 @@ async function validateChain(password, chain, minnerChainArray, id) {
     let validChain = validationData.maxEl;
     if(validChain != chain){
         validChain = await decrypt(password, validChain);
-        console.log({ validChain });
+        // console.log({ validChain });
         if(!validChain.message){
             await Transaction.findOneAndUpdate({ userId: id }, { $set: { transactionChain: validChain } }, { upsert: true, runValidators: true, new: true } );
             // validationData.maxEl = validChain;
@@ -79,7 +79,7 @@ async function validateChain(password, chain, minnerChainArray, id) {
 
 async function getTransaction(userId){
     let transactionDetails = await Transaction.findOne({ userId: userId })
-    console.log({ userId, transactionDetails });
+    // console.log({ userId, transactionDetails });
     return transactionDetails;
 }
 
@@ -107,14 +107,10 @@ async function addTransaction(hash, action, block, initiator){
         return transaction;
     }
     catch (error) {
-        console.log(error);
+        // console.log(error);
         return null;    
     }
 }
-
-// async function updateTransaction(id, status, nonce){
-//     return await Transaction.findOneAndUpdate({ 'transactionChain._id': id}, { $set: { 'transactionChain.$.status': status, 'transactionChain.$.nonce': nonce } });
-// }
 
 async function validateTransaction(dataArray){
     let frequency = {};
@@ -141,8 +137,6 @@ async function validateTransaction(dataArray){
 module.exports = {
     addTransaction,
     validateTransaction,
-    // updateTransaction,
-    // getTransaction,
     validateChain,
     encrypt,
     retrieveFirebase
