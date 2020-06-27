@@ -113,6 +113,7 @@ async function addTransaction(hash, action, block, initiator){
 }
 
 async function validateTransaction(dataArray){
+    // console.log(dataArray);
     let frequency = {};
     if(dataArray.length > 0){
         let maxEl = dataArray[0], maxCount = 1;

@@ -165,10 +165,22 @@ module.exports.initiateTransaction = async function(req, res){
                 // 11. Validating chain by finding maximum occurence of chain
                 let senderChainValidation = await transaction.validateChain(senderPassword, senderChainEncrypt, this.senderChainArray, sender._id);
                 let receiverChainValidation = await transaction.validateChain(receiverPassword, receiverChainEncrypt, this.receiverChainArray, receiver._id);
-                // console.log({ senderChainValidation, receiverChainValidation, nonceValidation });
+                // console.log({ senderChainValidation, receiverChainValidation });
                 
                 // 12. check whether all the max counts for block and chain are equal
-                if( senderChainValidation.maxCount == receiverChainValidation.maxCount == nonceValidation.maxCount == nonceHashValidation.maxCount && senderChainValidation.maxEl != -1 && receiverChainValidation.maxEl != -1 && nonceValidation.maxEl != -1 ){
+                let count = nonceValidation.maxCount;
+                let maxElement = -1;
+                let resultOfCount = nonceHashValidation.maxCount === count;
+                let resultOfMaxEl = nonceValidation.maxEl != maxElement;
+                // console.log({resultOfCount, resultOfMaxEl});
+                resultOfCount = resultOfCount && (senderChainValidation.maxCount === count);
+                resultOfMaxEl = resultOfMaxEl && (senderChainValidation.maxEl != maxElement);
+                // console.log({resultOfCount, resultOfMaxEl});
+                reesultOfCount = resultOfCount && (receiverChainValidation.maxCount === count);
+                resultOfMaxEl = resultOfMaxEl && (receiverChainValidation.maxEl != maxElement);
+                // console.log({resultOfCount, resultOfMaxEl});
+                // console.log(resultOfCount && resultOfMaxEl);
+                if( resultOfCount && resultOfMaxEl ){
                     block.status = "success";
                     block.nonce = nonceValidation.maxEl;
                     // console.log({block, hash, sender, receiver});
