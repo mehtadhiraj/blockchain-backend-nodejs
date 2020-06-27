@@ -66,12 +66,13 @@ module.exports.initiateTransaction = async function(req, res){
             7. Set the values in firebase
             8. Retrieve data from firebase
             9. Validate block (current transaction)
-            10. Validate chain
-            11. check match between chain and block validation
-            12. Add transaction or fail transaction 
-            13. Set firebase ref for broadcast
-            14. Encrypt the chain
-            15. Set a broadcast value
+            10. Compare minner nonce hash and hashing of hash value
+            11. Validate chain
+            12. check match between chain and block validation
+            13. Add transaction or fail transaction 
+            14. Set firebase ref for broadcast
+            15. Encrypt the chain
+            16. Set a broadcast value
         */
 
         // console.log(req.body);
@@ -81,7 +82,7 @@ module.exports.initiateTransaction = async function(req, res){
             throw new Error("Receiver does not exist.");
         
         let sender = await User.findById({ _id: req.body.userId });
-        console.log({ sender, receiver });
+        // console.log({ sender, receiver });
         if(sender._id.toString() === receiver._id.toString())
             throw new Error("Self Transfer of money cannot be done");
 
@@ -90,7 +91,7 @@ module.exports.initiateTransaction = async function(req, res){
         else{   
             activeTransaction[sender._id] = sender._id;
             activeTransaction[receiver._id] = receiver._id;
-            console.log({activeTransaction});
+            // console.log({activeTransaction});
         }
         
         // 2. Get user passwords
@@ -140,57 +141,85 @@ module.exports.initiateTransaction = async function(req, res){
         let nonceArray = senderChainArray = receiverChainArray = [];
         // 8. Retrieve nonce and chain details from firebase
         setTimeout(async ()=>{
-            this.nonceArray = await transaction.retrieveFirebase(transactionRef, "nonce");
-            this.senderChainArray = await transaction.retrieveFirebase(senderRef, "hash");
-            this.receiverChainArray = await transaction.retrieveFirebase(receiverRef, "hash");
-            // console.log(this.nonceArray, this.senderChainArray, this.receiverChainArray);
-            
-            // 9. Validating block by finding max value of occurence of nonce
-            let nonceValidation = await transaction.validateTransaction(this.nonceArray);
-            
-            // 10. Validating chain by finding maximum occurence of chain
-            let senderChainValidation = await transaction.validateChain(senderPassword, senderChainEncrypt, this.senderChainArray, sender._id);
-            let receiverChainValidation = await transaction.validateChain(receiverPassword, receiverChainEncrypt, this.receiverChainArray, receiver._id);
-            // console.log({ senderChainValidation, receiverChainValidation, nonceValidation });
-            
-            // 11. check whether all the max counts for block and chain are equal
-            if( senderChainValidation.maxCount == receiverChainValidation.maxCount == nonceValidation.maxCount && senderChainValidation.maxEl != -1 && receiverChainValidation.maxEl != -1 && nonceValidation.maxEl != -1 ){
-                block.status = "success";
-                block.nonce = nonceValidation.maxEl;
-                // console.log({block, hash, sender, receiver});
+            try{
+                this.nonceArray = await transaction.retrieveFirebase(transactionRef, "nonce");
+                this.senderChainArray = await transaction.retrieveFirebase(senderRef, "hash");
+                senderRef.remove();
+                this.receiverChainArray = await transaction.retrieveFirebase(receiverRef, "hash");
+                receiverRef.remove();
+                this.nonceHashArray = await transaction.retrieveFirebase(transactionRef, "nonceHash");
+                transactionRef.remove();
+                // console.log(this.nonceArray, this.senderChainArray, this.receiverChainArray, this.nonceHashArray);
+                
+                // 9. Validating block by finding max value of occurence of nonce
+                let nonceValidation = await transaction.validateTransaction(this.nonceArray);
+                let nonceHashValidation = await transaction.validateTransaction(this.nonceHashArray);
+                // console.log({ nonceValidation, nonceHashValidation });
 
-                // 12. Add transaction as successfull in the database
-                senderTransaction = await transaction.addTransaction(hash, "sent", block, sender._id);
-                receiverTransaction = await transaction.addTransaction(hash, "received", block, receiver._id);
-                // console.log({senderTransaction,receiverTransaction});
-                timeStamp = Date.now();
+                // 10. Compare a nonce hash on server and nonce hash received from minner by encrypting it using nonce number
+                let encryptedHash = await (await transaction.encrypt(nonceValidation.maxEl.toString(), hash.toString()));
+                // console.log(encryptedHash.toString());
+                if(encryptedHash.toString() != nonceHashValidation.maxEl)
+                    throw new Error("Transaction Failed!!");
 
-                // 13. Set reffrence for broadcast
-                let broadCastRef = firebase.ref('/broadcast');
-                senderRef = firebase.ref('broadcast/'+sender._id+'-'+timeStamp);
-                receiverRef = firebase.ref('broadcast/'+receiver._id+'-'+timeStamp);
+                // 11. Validating chain by finding maximum occurence of chain
+                let senderChainValidation = await transaction.validateChain(senderPassword, senderChainEncrypt, this.senderChainArray, sender._id);
+                let receiverChainValidation = await transaction.validateChain(receiverPassword, receiverChainEncrypt, this.receiverChainArray, receiver._id);
+                // console.log({ senderChainValidation, receiverChainValidation });
+                
+                // 12. check whether all the max counts for block and chain are equal
+                let count = nonceValidation.maxCount;
+                let maxElement = -1;
+                let resultOfCount = nonceHashValidation.maxCount === count;
+                let resultOfMaxEl = nonceValidation.maxEl != maxElement;
+                // console.log({resultOfCount, resultOfMaxEl});
+                resultOfCount = resultOfCount && (senderChainValidation.maxCount === count);
+                resultOfMaxEl = resultOfMaxEl && (senderChainValidation.maxEl != maxElement);
+                // console.log({resultOfCount, resultOfMaxEl});
+                reesultOfCount = resultOfCount && (receiverChainValidation.maxCount === count);
+                resultOfMaxEl = resultOfMaxEl && (receiverChainValidation.maxEl != maxElement);
+                // console.log({resultOfCount, resultOfMaxEl});
+                // console.log(resultOfCount && resultOfMaxEl);
+                if( resultOfCount && resultOfMaxEl ){
+                    block.status = "success";
+                    block.nonce = nonceValidation.maxEl;
+                    // console.log({block, hash, sender, receiver});
 
-                // 14. Encrypt the chain to be broadcast
-                senderChainEncrypt = await transaction.encrypt(senderPassword, senderTransaction.transactionChain);
-                receiverChainEncrypt = await transaction.encrypt(receiverPassword, receiverTransaction.transactionChain);
+                    // 13. Add transaction as successfull in the database
+                    senderTransaction = await transaction.addTransaction(hash, "sent", block, sender._id);
+                    receiverTransaction = await transaction.addTransaction(hash, "received", block, receiver._id);
+                    // console.log({senderTransaction,receiverTransaction});
+                    timeStamp = Date.now();
 
-                // 15. Set the vlaue in firebase
-                broadCastRef.remove();
-                senderRef.set({chain: senderChainEncrypt});
-                receiverRef.set({chain: receiverChainEncrypt});
-                delete activeTransaction[sender._id];
-                delete activeTransaction[receiver._id];
-                res.json({
-                    status: 200,
-                    message: "Transaction Successfull.\n-->Sender: "+sender.username+"\n-->Receiver: "+receiver.username+"\n-->Amount: "+block.amount.toString()
-                })
-            }else{
-                delete activeTransaction[sender._id];
-                delete activeTransaction[receiver._id];
+                    // 14. Set reffrence for broadcast
+                    let broadCastRef = firebase.ref('/broadcast');
+                    senderRef = firebase.ref('broadcast/'+sender._id+'-'+timeStamp);
+                    receiverRef = firebase.ref('broadcast/'+receiver._id+'-'+timeStamp);
+
+                    // 15. Encrypt the chain to be broadcast
+                    senderChainEncrypt = await transaction.encrypt(senderPassword, senderTransaction.transactionChain);
+                    receiverChainEncrypt = await transaction.encrypt(receiverPassword, receiverTransaction.transactionChain);
+
+                    // 16. Set the vlaue in firebase
+                    broadCastRef.remove();
+                    senderRef.set({chain: senderChainEncrypt});
+                    receiverRef.set({chain: receiverChainEncrypt});
+                    delete activeTransaction[sender._id];
+                    delete activeTransaction[receiver._id];
+                    res.json({
+                        status: 200,
+                        message: "Transaction Successfull.\n-->Sender: "+sender.username+"\n-->Receiver: "+receiver.username+"\n-->Amount: "+block.amount.toString()
+                    })
+                }else{
+                    delete activeTransaction[sender._id];
+                    delete activeTransaction[receiver._id];
+                    throw new Error("Transaction Failed!!\n-->Sender: "+sender.username+"\n-->Receiver: "+receiver.username+"\n-->Amount: "+block.amount.toString());
+                }
+            }catch (error){
                 res.json({
                     status: 204,
-                    message: "Transaction Failed!!\n-->Sender: "+sender.username+"\n-->Receiver: "+receiver.username+"\n-->Amount: "+block.amount.toString()
-                })
+                    message: error.message
+                }) 
             }
         }, 30000)         
     } catch (error) {
